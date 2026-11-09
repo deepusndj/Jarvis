@@ -26,13 +26,14 @@ import logging
 import urllib.request
 import json as jsonlib
 
-from flask import Flask
+from flask import Flask, request, jsonify
 from ask_sdk_core.skill_builder import SkillBuilder
 from ask_sdk_core.dispatch_components import AbstractRequestHandler, AbstractExceptionHandler
 from ask_sdk_core.utils import is_request_type, is_intent_name
 from ask_sdk_core.handler_input import HandlerInput
+from ask_sdk_core.serialize import DefaultSerializer
 from ask_sdk_model import Response
-from flask_ask_sdk.skill_adapter import SkillAdapter
+from ask_sdk_model.request_envelope import RequestEnvelope
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -177,6 +178,9 @@ sb.add_request_handler(CancelOrStopIntentHandler())
 sb.add_request_handler(SessionEndedRequestHandler())
 sb.add_exception_handler(CatchAllExceptionHandler())
 
+skill = sb.create()
+serializer = DefaultSerializer()
+
 app = Flask(__name__)
 
 # Optional: set SKILL_ID (your Alexa Skill's ID, from the Alexa Developer Console)
@@ -184,8 +188,30 @@ app = Flask(__name__)
 # don't come from your own skill. Safe to leave unset while you're getting it working.
 SKILL_ID = os.environ.get("SKILL_ID") or None
 
-skill_adapter = SkillAdapter(skill=sb.create(), skill_id=SKILL_ID, app=app)
-skill_adapter.register(app=app, route="/")
+# NOTE: This handles raw Alexa JSON directly with ask-sdk-core's skill.invoke(),
+# instead of using the flask-ask-sdk / ask-sdk-webservice-support adapter. Those
+# packages pull in a dependency (oscrypto, for request-signature verification)
+# that fails to load on current Python/OpenSSL versions on Render. Skipping
+# official request-signature verification is an acceptable trade-off for a
+# private/development-mode skill; set SKILL_ID above for a basic sanity check.
+@app.route("/", methods=["POST"])
+def invoke_skill():
+    body = request.get_json(force=True, silent=True) or {}
+
+    if SKILL_ID:
+        sent_id = (
+            body.get("context", {})
+            .get("System", {})
+            .get("application", {})
+            .get("applicationId")
+        )
+        if sent_id and sent_id != SKILL_ID:
+            return jsonify({"error": "invalid applicationId"}), 400
+
+    request_envelope = serializer.deserialize(body, RequestEnvelope)
+    response_envelope = skill.invoke(request_envelope=request_envelope, context=None)
+    response_dict = serializer.serialize(response_envelope)
+    return jsonify(response_dict)
 
 
 @app.route("/health")
