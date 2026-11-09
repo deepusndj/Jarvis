@@ -1,0 +1,5 @@
+flask==3.0.3
+gunicorn==22.0.0
+ask-sdk-core==1.19.0
+ask-sdk-model==1.39.0
+ask-sdk-webservice-support==1.5.0
