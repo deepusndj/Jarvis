@@ -32,7 +32,7 @@ from ask_sdk_core.dispatch_components import AbstractRequestHandler, AbstractExc
 from ask_sdk_core.utils import is_request_type, is_intent_name
 from ask_sdk_core.handler_input import HandlerInput
 from ask_sdk_model import Response
-from ask_sdk_webservice_support.skill_adapter import SkillAdapter
+from flask_ask_sdk.skill_adapter import SkillAdapter
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
